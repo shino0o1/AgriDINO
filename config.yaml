@@ -1,0 +1,27 @@
+annotations: ""
+image_root: null
+dino_weights: ""
+dinov3_repo: "dinov3"
+
+text_model_name_or_path: "recobo/agriculture-bert-uncased"
+max_length: 256
+freeze_text_backbone: false
+
+epochs: 1
+batch_size: 2
+num_workers: 0
+lr: 0.0006
+weight_decay: 0.001
+drop_last: true
+grad_accum_steps: 1
+max_grad_norm: 1.0
+warmup_ratio: 0.1
+min_lr_ratio: 0.01
+
+# Temperature settings
+init_temperature: 0.07
+logit_scale_max: 100.0
+
+device: "cuda"
+seed: 42
+output_dir: "outputs/stage2"

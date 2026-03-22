@@ -1,0 +1,22 @@
+{
+  "annotations": "G:\\research_data\\final_data.jsonl",
+  "image_root": null,
+  "dino_weights": "C:\\Users\\1217\\.cache\\torch\\hub\\checkpoints\\dinov3_vitl16_pretrain_lvd1689m-8aa4cbdd.pth",
+  "dinov3_repo": "dinov3",
+  "text_model_name_or_path": "recobo/agriculture-bert-uncased",
+  "max_length": 256,
+  "freeze_text_backbone": false,
+  "epochs": 1,
+  "batch_size": 2,
+  "num_workers": 0,
+  "lr": 0.0006,
+  "weight_decay": 0.001,
+  "drop_last": true,
+  "grad_accum_steps": 1,
+  "max_grad_norm": 1.0,
+  "warmup_ratio": 0.1,
+  "min_lr_ratio": 0.01,
+  "device": "cuda",
+  "seed": 42,
+  "output_dir": "outputs/stage2"
+}
