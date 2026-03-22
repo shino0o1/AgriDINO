@@ -25,7 +25,7 @@ conda activate agridino
 
 dataset links here:
 
-- Sample dataset Download (Cloud Drive): **[TBD_LINK_1]**
+- Sample dataset Download (Cloud Drive): **[[TBD_LINK_1](https://drive.google.com/file/d/1aeePQgSCjCuFg-6xfJQ3gdutwvgV_YUH/view?usp=sharing)]**
 
 Expected annotation fields include:
 
