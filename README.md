@@ -23,10 +23,9 @@ conda activate agridino
 
 ## Dataset
 
-Please place your dataset links here:
+dataset links here:
 
-- Dataset Download (Cloud Drive): **[TBD_LINK_1]**
-- Mirror / Backup Link: **[TBD_LINK_2]**
+- Sample dataset Download (Cloud Drive): **[TBD_LINK_1]**
 
 Expected annotation fields include:
 
@@ -44,60 +43,10 @@ Expected annotation fields include:
 
 ```bash
 python scripts/train_stage2.py --config config.yaml
-```
 
-You can override config values from CLI, for example:
-
-```bash
-python scripts/train_stage2.py --config config.yaml --epochs 5 --batch-size 8
-```
-
-## Inference / Evaluation
-
-This repo includes `scripts/infer_stage2.py` for:
-
-- Zero-shot disease classification
-- Image-text retrieval (Recall@K)
-
-### 1) Retrieval
-
-```bash
-python scripts/infer_stage2.py \
-  --config config.yaml \
-  --checkpoint outputs/stage2/latest.pt \
-  --task retrieval \
-  --branch avg \
-  --topk 1,5,10
-```
-
-### 2) Zero-shot classification
-
-```bash
-python scripts/infer_stage2.py \
-  --config config.yaml \
-  --checkpoint outputs/stage2/latest.pt \
-  --task zeroshot \
-  --branch avg \
-  --class-text-source short
-```
-
-Optional: provide custom class names via JSON:
-
-```json
-{
-  "0": "black rot",
-  "1": "flea beetle"
-}
-```
-
-Then run with:
-
-```bash
-python scripts/infer_stage2.py --config config.yaml --checkpoint outputs/stage2/latest.pt --task zeroshot --class-text-source id2label --id2label path/to/id2label.json
 ```
 
 ## Notes
 
 - AMP training is enabled automatically on CUDA.
 - Checkpoints are saved to `output_dir` from `config.yaml`.
-- This repo focuses on practical reproducibility rather than full production packaging.
