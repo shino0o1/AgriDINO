@@ -1,6 +1,6 @@
 This repository contains the core code implementation and dataset of the AgriDINO paper:
 
-**"AgriDINO: A DINO-centric fine-grained vision-language model for identifying agricultural pests and diseases."**
+**"A dual-branch vision-language framework with taxonomy-aware alignment for fine-grained crop pest and disease identification"**
 
 ## Project Structure
 
