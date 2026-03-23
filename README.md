@@ -135,3 +135,4 @@ Example `id2label` file:
 
 - AMP training is enabled automatically on CUDA.
 - Checkpoints are saved to `output_dir` from `config.yaml`.
+- The complete train dataset and weight files will be updated to cloud drive soon.
