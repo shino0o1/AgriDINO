@@ -25,3 +25,53 @@ logit_scale_max: 100.0
 device: "cuda"
 seed: 42
 output_dir: "outputs/stage2"
+
+stage1:
+  dinov3_repo: "dinov3"
+  annotations: ""
+  image_root: null
+  output_dir: "outputs/stage1"
+  resume: true
+  seed: 0
+
+  # Training
+  epochs: 30
+  batch_size_per_gpu: 16
+  num_workers: 4
+  official_epoch_length: 0
+  dino_init_weights: ""
+
+  # Optimizer / scheduler
+  lr: 0.0005
+  min_lr: 0.000001
+  warmup_epochs: 0
+  weight_decay: 0.04
+  weight_decay_end: 0.04
+  scaling_rule: "none"
+  clip_grad: 3.0
+  freeze_last_layer_epochs: 1
+  adamw_beta1: 0.9
+  adamw_beta2: 0.999
+
+  # ViT-L/16
+  student_arch: "vit_large"
+  patch_size: 16
+  n_storage_tokens: 4
+  drop_path_rate: 0.3
+
+  # Teacher temperature/momentum
+  teacher_momentum: 0.992
+  teacher_final_momentum: 1.0
+  teacher_temp: 0.07
+  teacher_warmup_temp: 0.04
+  teacher_warmup_temp_epochs: 30
+
+  # DINO-style multi-crop
+  global_crops_scale: [0.4, 1.0]
+  local_crops_scale: [0.05, 0.4]
+  global_crops_size: 224
+  local_crops_size: 96
+  local_crops_number: 8
+
+  # fp32 / fp16 / bf16
+  param_dtype: "bf16"

@@ -1,6 +1,4 @@
-# AgriDINO (Reproduction)
-
-This repository contains the code implementation and dataset of the AgriDINO paper:
+This repository contains the core code implementation and dataset of the AgriDINO paper:
 
 **"AgriDINO: A DINO-centric fine-grained vision-language model for identifying agricultural pests and diseases."**
 
@@ -45,6 +43,93 @@ Expected annotation fields include:
 python scripts/train_stage2.py --config config.yaml
 
 ```
+
+## Training (Stage 1 SSL)
+
+1. Fill `stage1.annotations`, `stage1.image_root`, and `stage1.dino_init_weights` in `config.yaml`.
+2. Run:
+
+```bash
+python scripts/train_stage1.py --config config.yaml
+```
+
+Outputs are saved to `stage1.output_dir`, including:
+
+- `checkpoints/latest.pt` (resume training)
+- `teacher_backbone_latest.pth` (directly loadable by `models/vision.py` as `dino_weights_path`)
+
+## Inference and Evaluation
+
+```bash
+python scripts/infer.py --config config.yaml --checkpoint <stage2_ckpt.pt> --task retrieval
+```
+
+### 1 Image-Text Retrieval
+
+Evaluate image-to-text and text-to-image retrieval with Recall@K:
+
+```bash
+python scripts/infer.py \
+  --config config.yaml \
+  --checkpoint outputs/stage2/latest.pt \
+  --task retrieval \
+  --branch avg \
+  --topk 1,5,10
+```
+
+Notes:
+
+- `--branch` controls which representation is used:
+  - `global`: CLS/global branch only
+  - `fine`: MAP/fine-grained branch only
+  - `avg`: average of global and fine branch (then L2-normalized)
+- Ground-truth pairing assumes the i-th image matches the i-th text in the same annotation order.
+
+### 2 Zero-shot Classification
+
+Use text prototypes as class prompts and classify images by max similarity:
+
+```bash
+python scripts/infer.py \
+  --config config.yaml \
+  --checkpoint outputs/stage2/latest.pt \
+  --task zeroshot \
+  --branch avg \
+  --class-text-source short
+```
+
+`--class-text-source` options:
+
+- `short`: use `short_description` as class prototype text
+- `long`: use `long_description` as class prototype text
+- `id2label`: load external class text mapping via `--id2label <json>`
+
+Example `id2label` file:
+
+```json
+{
+  "0": "downy mildew",
+  "1": "black rot",
+  "2": "flea beetle"
+}
+```
+
+### 3 Common Inference Arguments
+
+- `--annotations`: override annotation path from `config.yaml`
+- `--image-root`: override image root path
+- `--batch-size`: inference batch size
+- `--num-workers`: dataloader workers
+- `--device`: `cuda`
+
+### 4 Expected Outputs
+
+- Retrieval mode prints:
+  - similarity matrix shape
+  - Recall@1/5/10 for both i2t and t2i
+- Zero-shot mode prints:
+  - top-1 classification accuracy
+  - number of classes and text source used
 
 ## Notes
 
