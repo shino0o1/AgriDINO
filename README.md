@@ -24,7 +24,7 @@ conda activate agridino
 dataset links here:
 
 - Sample dataset Download (Cloud Drive): **[[TBD_LINK_1](https://drive.google.com/file/d/1aeePQgSCjCuFg-6xfJQ3gdutwvgV_YUH/view?usp=sharing)]**
-- Full dataset link (Cloud Drive): [[Agricap](https://pan.baidu.com/s/1CAJgXmkRrCxdcY8Qu837qA?pwd=jtb4)]
+- Full dataset link (Cloud Drive): [[Agricap](https://pan.baidu.com/s/17UsDnXoFUM8-1z73ZhS30A?pwd=s61f)]
 
 Expected annotation fields include:
 
