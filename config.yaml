@@ -25,6 +25,7 @@ logit_scale_max: 100.0
 device: "cuda"
 seed: 42
 output_dir: "outputs/stage2"
+class_mapping_path: ""
 
 stage1:
   dinov3_repo: "dinov3"

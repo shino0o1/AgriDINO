@@ -29,11 +29,18 @@ class AgricultureTextEncoder(nn.Module):
             local_files_only=local_files_only,
         )
         self.hidden_size = int(self.backbone.config.hidden_size)
+        self.freeze_backbone = freeze_backbone
 
         if freeze_backbone:
             self.backbone.eval()
             for param in self.backbone.parameters():
                 param.requires_grad = False
+
+    def train(self, mode: bool = True) -> "AgricultureTextEncoder":
+        super().train(mode)
+        if self.freeze_backbone:
+            self.backbone.eval()
+        return self
 
     @staticmethod
     def _ensure_text_list(text: str | list[str], field_name: str) -> list[str]:
@@ -153,4 +160,3 @@ if __name__ == "__main__":
     assert output_tokenized["long_text_feature"].shape == output_raw["long_text_feature"].shape
 
     print("Text encoder forward check passed.")
-

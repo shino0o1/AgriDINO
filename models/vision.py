@@ -71,6 +71,12 @@ class DINOv3VisionEncoder(nn.Module):
             for param in self.backbone.parameters():
                 param.requires_grad = False
 
+    def train(self, mode: bool = True) -> "DINOv3VisionEncoder":
+        super().train(mode)
+        if self.freeze_backbone:
+            self.backbone.eval()
+        return self
+
     @staticmethod
     def _load_backbone_from_local_repo(repo_path: Path, weights_path: Path) -> nn.Module:
         repo_path = repo_path.resolve()

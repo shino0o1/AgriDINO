@@ -44,6 +44,8 @@ DEFAULT_CONFIG: dict[str, object] = {
     "device": "cuda",
     "seed": 42,
     "output_dir": "outputs/stage2",
+    "class_mapping_path": "",
+    "resume": False,
     "logit_scale_max": 100.0,
     "init_temperature": 0.07,
 }
@@ -93,6 +95,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", type=str, default=None, help="cuda or cpu")
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--output-dir", type=str, default=None)
+    parser.add_argument("--resume", type=_str2bool, default=None, help="Resume from output_dir/latest.pt")
     return parser.parse_args()
 
 
@@ -139,6 +142,24 @@ def save_args(args: argparse.Namespace, output_dir: Path) -> None:
         json.dump(payload, f, indent=2, ensure_ascii=False)
 
 
+def load_training_checkpoint(
+    path: Path,
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    scheduler: LambdaLR,
+    scaler: torch.amp.GradScaler,
+) -> int:
+    checkpoint = torch.load(path, map_location="cpu")
+    if not isinstance(checkpoint, dict) or "model" not in checkpoint:
+        raise ValueError(f"Invalid training checkpoint: {path}")
+    model.load_state_dict(checkpoint["model"], strict=True)
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    if "scaler" in checkpoint:
+        scaler.load_state_dict(checkpoint["scaler"])
+    return int(checkpoint.get("epoch", -1)) + 1
+
+
 def load_config(config_path: str | Path) -> dict[str, object]:
     path = Path(config_path)
     if not path.exists():
@@ -150,6 +171,19 @@ def load_config(config_path: str | Path) -> dict[str, object]:
     config = dict(DEFAULT_CONFIG)
     config.update(loaded)
     return config
+
+
+def load_class_mapping(path: str | Path | None) -> dict[str, dict[str, int]]:
+    if path in (None, "", "null"):
+        return {}
+    with Path(path).open("r", encoding="utf-8") as f:
+        mapping = json.load(f)
+    if not isinstance(mapping, dict) or not all(isinstance(mapping.get(k, {}), dict) for k in ("crop", "disease")):
+        raise ValueError("class_mapping_path must contain an object with 'crop' and 'disease' mappings")
+    return {
+        "crop": {str(k): int(v) for k, v in mapping["crop"].items()},
+        "disease": {str(k): int(v) for k, v in mapping["disease"].items()},
+    }
 
 
 def apply_cli_overrides(config: dict[str, object], args: argparse.Namespace) -> dict[str, object]:
@@ -174,6 +208,7 @@ def apply_cli_overrides(config: dict[str, object], args: argparse.Namespace) -> 
         "device": args.device,
         "seed": args.seed,
         "output_dir": args.output_dir,
+        "resume": args.resume,
         "logit_scale_max": args.logit_scale_max,
         "init_temperature": args.init_temperature,
     }
@@ -300,7 +335,17 @@ def main() -> None:
         annotations=str(config["annotations"]),
         image_root=(None if config["image_root"] in (None, "", "null") else str(config["image_root"])),
         stage="stage2",
+        class_mapping=load_class_mapping(config.get("class_mapping_path")),
     )
+    mapping_path = config.get("class_mapping_path")
+    if mapping_path in (None, "", "null"):
+        mapping_path = output_dir / "class_mapping.json"
+        with Path(mapping_path).open("w", encoding="utf-8") as f:
+            json.dump(dataset.get_class_mapping(), f, indent=2, ensure_ascii=False)
+    if len(dataset) == 0:
+        raise ValueError("Dataset is empty.")
+    if bool(config["drop_last"]) and len(dataset) < int(config["batch_size"]):
+        raise ValueError("drop_last=True would produce zero batches because dataset is smaller than batch_size.")
     loader = DataLoader(
         dataset,
         batch_size=int(config["batch_size"]),
@@ -334,13 +379,18 @@ def main() -> None:
     )
 
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
+    start_epoch = 0
+    latest_ckpt = output_dir / "latest.pt"
+    if bool(config["resume"]) and latest_ckpt.exists():
+        start_epoch = load_training_checkpoint(latest_ckpt, model, optimizer, scheduler, scaler)
+        print(f"Resumed from checkpoint: {latest_ckpt} (next epoch={start_epoch + 1})")
 
     print(f"Device: {device}")
     print(f"AMP enabled: {use_amp}")
     print(f"Train size: {len(dataset)}")
     print(f"Steps/epoch: {len(loader)}, Updates/epoch: {updates_per_epoch}, Total updates: {total_updates}")
 
-    for epoch_idx in range(int(config["epochs"])):
+    for epoch_idx in range(start_epoch, int(config["epochs"])):
         stats = train_one_epoch(
             model=model,
             loader=loader,
@@ -362,8 +412,15 @@ def main() -> None:
 
         epoch_ckpt = output_dir / f"epoch_{epoch_idx + 1}.pt"
         latest_ckpt = output_dir / "latest.pt"
-        torch.save(model.state_dict(), epoch_ckpt)
-        torch.save(model.state_dict(), latest_ckpt)
+        checkpoint = {
+            "epoch": epoch_idx,
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "scaler": scaler.state_dict(),
+        }
+        torch.save(checkpoint, epoch_ckpt)
+        torch.save(checkpoint, latest_ckpt)
 
     print("Training completed.")
 

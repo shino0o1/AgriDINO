@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import math
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -296,6 +297,11 @@ def main() -> None:
         raise ValueError("stage1.dino_init_weights is required in config.yaml or via --dino-init-weights")
     if not torch.cuda.is_available():
         raise RuntimeError("Stage1 training currently requires CUDA (DINOv3 forward uses .cuda()).")
+    if int(os.environ.get("WORLD_SIZE", "1")) != 1:
+        raise RuntimeError(
+            "Stage1 custom runner currently supports one GPU only. "
+            "Do not launch it with torchrun; use the official DINOv3 distributed entrypoint for multi-GPU training."
+        )
 
     ensure_dinov3_importable(stage1_cfg["dinov3_repo"])
 
@@ -353,11 +359,6 @@ def main() -> None:
     output_dir = Path(cfg.train.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # Build model first so we can reuse official DINOv3 augmentation from the model itself.
-    model = SSLMetaArch(cfg)
-    model.to_empty(device="cuda")
-    model.init_weights()
-
     dino_init_path = Path(str(stage1_cfg["dino_init_weights"])).expanduser().resolve()
     if not dino_init_path.exists():
         raise FileNotFoundError(f"Initial DINO weights not found: {dino_init_path}")
@@ -365,17 +366,18 @@ def main() -> None:
     backbone_state = sanitize_backbone_state_dict(init_payload)
     if len(backbone_state) == 0:
         raise RuntimeError(f"Cannot parse backbone weights from: {dino_init_path}")
-    msg_student = model.student["backbone"].load_state_dict(backbone_state, strict=True)
-    msg_teacher = model.model_ema["backbone"].load_state_dict(backbone_state, strict=True)
-    print(f"Loaded init backbone into student: {msg_student}")
-    print(f"Loaded init backbone into teacher: {msg_teacher}")
-
-    transform = model.build_data_augmentation_dino(cfg)
     dataset = AnnotationImageDataset(
         annotations=str(stage1_cfg["annotations"]),
         image_root=stage1_cfg["image_root"],
-        transform=transform,
+        transform=lambda image: image,
     )
+    if len(dataset) == 0:
+        raise ValueError("Stage1 dataset is empty.")
+    if len(dataset) < cfg.train.batch_size_per_gpu:
+        raise ValueError(
+            "Stage1 dataset is smaller than batch_size_per_gpu while drop_last=True; "
+            "reduce the batch size or provide more samples."
+        )
 
     if int(stage1_cfg["official_epoch_length"]) > 0:
         official_epoch_length = int(stage1_cfg["official_epoch_length"])
@@ -383,8 +385,20 @@ def main() -> None:
         official_epoch_length = max(math.ceil(len(dataset) / cfg.train.batch_size_per_gpu), 1)
     cfg.train.OFFICIAL_EPOCH_LENGTH = int(official_epoch_length)
 
+    # Build the model only after the actual epoch length is known because DINO schedules
+    # may be created during model construction.
+    model = SSLMetaArch(cfg)
+    model.to_empty(device="cuda")
+    model.init_weights()
+    msg_student = model.student["backbone"].load_state_dict(backbone_state, strict=True)
+    msg_teacher = model.model_ema["backbone"].load_state_dict(backbone_state, strict=True)
+    print(f"Loaded init backbone into student: {msg_student}")
+    print(f"Loaded init backbone into teacher: {msg_teacher}")
+
     # Persist the resolved DINO config for reproducibility.
     write_config(cfg, str(output_dir), name="stage1_dinov3_resolved.yaml")
+
+    dataset.transform = model.build_data_augmentation_dino(cfg)
 
     img_size = cfg.crops.global_crops_size
     patch_size = int(cfg.student.patch_size * cfg.crops.teacher_to_student_resolution_scale)

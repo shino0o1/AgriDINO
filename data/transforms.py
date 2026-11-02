@@ -5,10 +5,6 @@ from typing import Sequence
 import torch
 from torchvision.transforms import v2
 
-# CLIP normalization constants (OpenAI CLIP preprocessing).
-CLIP_MEAN = (0.48145466, 0.4578275, 0.40821073)
-CLIP_STD = (0.26862954, 0.26130258, 0.27577711)
-
 # Default normalization for DINO-style image pipelines.
 IMAGENET_MEAN = (0.485, 0.456, 0.406)
 IMAGENET_STD = (0.229, 0.224, 0.225)
@@ -148,8 +144,8 @@ def build_stage1_dino_multicrop_transform(
 
 def build_stage2_clip_transform(
     image_size: int = 224,
-    mean: Sequence[float] = CLIP_MEAN,
-    std: Sequence[float] = CLIP_STD,
+    mean: Sequence[float] = IMAGENET_MEAN,
+    std: Sequence[float] = IMAGENET_STD,
 ) -> v2.Compose:
     return v2.Compose(
         [
@@ -160,4 +156,3 @@ def build_stage2_clip_transform(
             v2.Normalize(mean=mean, std=std),
         ]
     )
-
