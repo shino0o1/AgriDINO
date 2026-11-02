@@ -42,6 +42,7 @@ class AgricapDataset(Dataset):
         stage: str = "stage1",
         transform=None,
         column_map: dict[str, str] | None = None,
+        class_mapping: dict[str, dict[str, int]] | None = None,
     ) -> None:
         self.stage = stage.lower()
         if self.stage not in {"stage1", "stage2"}:
@@ -49,8 +50,13 @@ class AgricapDataset(Dataset):
 
         self.image_root = Path(image_root) if image_root is not None else None
         self.column_map = column_map or {}
+        self.class_mapping = class_mapping or {}
         raw_samples = self._load_annotations(annotations)
         self.samples = self._normalize_samples(raw_samples)
+        self.resolved_class_mapping = {
+            "crop": dict(self._crop_class_to_id),
+            "disease": dict(self._disease_class_to_id),
+        }
 
         if transform is not None:
             self.transform = transform
@@ -159,6 +165,10 @@ class AgricapDataset(Dataset):
         normalized: list[dict[str, Any]] = []
         crop_class_to_id: dict[str, int] = {}
         disease_class_to_id: dict[str, int] = {}
+        crop_class_to_id.update(self.class_mapping.get("crop", {}))
+        disease_class_to_id.update(self.class_mapping.get("disease", {}))
+        self._crop_class_to_id = crop_class_to_id
+        self._disease_class_to_id = disease_class_to_id
 
         for idx, sample in enumerate(raw_samples):
             if not isinstance(sample, dict):
@@ -187,6 +197,8 @@ class AgricapDataset(Dataset):
                 else:
                     crop_name = self._normalize_category_name(str(sample[crop_class_key]))
                     if crop_name not in crop_class_to_id:
+                        if self.class_mapping.get("crop"):
+                            raise KeyError(f"Unknown crop class {crop_name!r} in supplied class_mapping")
                         crop_class_to_id[crop_name] = len(crop_class_to_id)
                     crop_id = crop_class_to_id[crop_name]
 
@@ -195,6 +207,8 @@ class AgricapDataset(Dataset):
                 else:
                     disease_name = self._normalize_category_name(str(sample[disease_class_key]))
                     if disease_name not in disease_class_to_id:
+                        if self.class_mapping.get("disease"):
+                            raise KeyError(f"Unknown disease class {disease_name!r} in supplied class_mapping")
                         disease_class_to_id[disease_name] = len(disease_class_to_id)
                     disease_id = disease_class_to_id[disease_name]
 
@@ -211,6 +225,12 @@ class AgricapDataset(Dataset):
                 raise ValueError(f"Invalid annotation at index={idx}: {sample}") from exc
 
         return normalized
+
+    def get_class_mapping(self) -> dict[str, dict[str, int]]:
+        return {
+            "crop": dict(self.resolved_class_mapping["crop"]),
+            "disease": dict(self.resolved_class_mapping["disease"]),
+        }
 
     @staticmethod
     def _normalize_category_name(name: str) -> str:

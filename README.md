@@ -38,6 +38,9 @@ Expected annotation fields include:
 ## Training (Stage 2)
 
 1. Edit `config.yaml` with your local paths (`annotations`, `image_root`, `dino_weights`).
+   When annotations contain class names instead of numeric IDs, set
+   `class_mapping_path` to a shared JSON mapping; training writes one to the output
+   directory when omitted, and inference can reuse it.
 2. Run:
 
 ```bash
@@ -58,6 +61,8 @@ Outputs are saved to `stage1.output_dir`, including:
 
 - `checkpoints/latest.pt` (resume training)
 - `teacher_backbone_latest.pth` (directly loadable by `models/vision.py` as `dino_weights_path`)
+
+The custom Stage 1 runner is single-GPU and rejects `torchrun` multi-GPU launches.
 
 ## Inference and Evaluation
 

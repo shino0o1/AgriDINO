@@ -40,6 +40,11 @@ def build_taxonomy_soft_targets(
     alpha: float = 0.5,
     beta: float = 0.25,
 ) -> torch.Tensor:
+    if not 0.0 <= epsilon < 1.0:
+        raise ValueError(f"epsilon must be in [0, 1), got {epsilon}")
+    if alpha < 0.0 or beta < 0.0:
+        raise ValueError(f"alpha and beta must be non-negative, got alpha={alpha}, beta={beta}")
+
     crop_labels, disease_labels = _prepare_labels(similarity, crop_labels, disease_labels)
     _validate_inputs(similarity, crop_labels, disease_labels)
 
@@ -143,4 +148,3 @@ if __name__ == "__main__":
         print("amp grad finite:", bool(torch.isfinite(sim_amp.grad).all()))
 
     print("Taxonomy-aware loss check passed.")
-

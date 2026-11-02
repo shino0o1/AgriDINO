@@ -53,6 +53,19 @@ def load_yaml(path: str | Path) -> dict:
     return data
 
 
+def load_class_mapping(path: str | Path | None) -> dict[str, dict[str, int]]:
+    if path in (None, "", "null"):
+        return {}
+    with Path(path).open("r", encoding="utf-8") as f:
+        mapping = json.load(f)
+    if not isinstance(mapping, dict) or not all(isinstance(mapping.get(k, {}), dict) for k in ("crop", "disease")):
+        raise ValueError("class_mapping_path must contain an object with 'crop' and 'disease' mappings")
+    return {
+        "crop": {str(k): int(v) for k, v in mapping["crop"].items()},
+        "disease": {str(k): int(v) for k, v in mapping["disease"].items()},
+    }
+
+
 def resolve_device(device_arg: str | None, config: dict) -> torch.device:
     candidate = device_arg if device_arg is not None else str(config.get("device", "cuda"))
     if candidate.startswith("cuda") and torch.cuda.is_available():
@@ -91,6 +104,8 @@ def load_model(args: argparse.Namespace, config: dict, device: torch.device) -> 
     ).to(device)
 
     ckpt = torch.load(args.checkpoint, map_location=device)
+    if isinstance(ckpt, dict) and "model" in ckpt:
+        ckpt = ckpt["model"]
     model.load_state_dict(ckpt, strict=True)
     model.eval()
     return model
@@ -108,7 +123,10 @@ def build_loader(args: argparse.Namespace, config: dict, device: torch.device) -
         annotations=annotations,
         image_root=image_root,
         stage="stage2",
+        class_mapping=load_class_mapping(config.get("class_mapping_path")),
     )
+    if len(dataset) == 0:
+        raise ValueError("Dataset is empty.")
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -150,18 +168,29 @@ def run_retrieval(model: AgriDINO, loader: DataLoader, device: torch.device, bra
 
     image_feats = torch.cat(all_v, dim=0)
     text_feats = torch.cat(all_t, dim=0)
-    # Pairwise similarity over all image-text pairs in the evaluation split.
-    sim = image_feats @ text_feats.T
+    if image_feats.size(0) == 0:
+        raise ValueError("Retrieval dataset is empty.")
+    if image_feats.size(0) != text_feats.size(0):
+        raise ValueError("Image and text feature counts must match.")
 
-    print(f"Similarity matrix: {tuple(sim.shape)}")
-    # Retrieval ground-truth assumes aligned index i <-> i in the same dataset order.
-    target = torch.arange(sim.size(0))
-
+    print(f"Similarity matrix: ({image_feats.size(0)}, {text_feats.size(0)}) (evaluated in chunks)")
+    chunk_size = 1024
     for k in topk:
-        i2t_topk = sim.topk(k, dim=1).indices
-        t2i_topk = sim.T.topk(k, dim=1).indices
-        i2t_hit = (i2t_topk == target.unsqueeze(1)).any(dim=1).float().mean().item()
-        t2i_hit = (t2i_topk == target.unsqueeze(1)).any(dim=1).float().mean().item()
+        i2t_hits = 0
+        t2i_hits = 0
+        for start in range(0, image_feats.size(0), chunk_size):
+            end = min(start + chunk_size, image_feats.size(0))
+            sim_chunk = image_feats[start:end] @ text_feats.T
+            indices = sim_chunk.topk(k, dim=1).indices
+            targets = torch.arange(start, end).unsqueeze(1)
+            i2t_hits += (indices == targets).any(dim=1).sum().item()
+
+            sim_chunk = text_feats[start:end] @ image_feats.T
+            indices = sim_chunk.topk(k, dim=1).indices
+            t2i_hits += (indices == targets).any(dim=1).sum().item()
+
+        i2t_hit = i2t_hits / image_feats.size(0)
+        t2i_hit = t2i_hits / text_feats.size(0)
         print(f"Recall@{k}: i2t={i2t_hit:.4f}, t2i={t2i_hit:.4f}")
 
 
